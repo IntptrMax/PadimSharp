@@ -41,48 +41,92 @@ namespace Padim
 			float image_threshold = weight.get_buffer("image_threshold").ToSingle();
 			float pixel_threshold = weight.get_buffer("pixel_threshold").ToSingle();
 
-			MVTecDataset.ValDataset valDataset = new MVTecDataset.ValDataset(dataPath);
+			string testDataPath = dataPath;
+			MVTecDataset.ValDataset valDataset = new MVTecDataset.ValDataset(testDataPath);
 
-			Tensor tagTensor = torch.zeros(1);
-			Tensor truthTensor = torch.zeros(1);
 			List<(string, Tensor)> outputs = new List<(string, Tensor)>();
-
-			var tensors = valDataset.GetTensor(8);
 
 			Console.WriteLine("Get layers......");
 			ModelHelper modelHelper = new ModelHelper(model);
 
-			using (torch.no_grad())
+			int wrongCount = 0;
+			int uncheckedCount = 0;
+			for (int i = 0; i < valDataset.Count; i++)
 			{
-				tagTensor = tensors["tag"].clone().to(device);
-				truthTensor = tensors["truth"].clone().to(device);
-				outputs = modelHelper.Forward(tensors["image"].clone().to(device).unsqueeze(0));
-			}
+				var tensors = valDataset.GetTensor(i);
+				Tensor tagTensor = tensors["tag"].clone().to(device);
+				using (torch.no_grad())
+				{
+					outputs = modelHelper.Forward(tensors["image"].clone().to(device).unsqueeze(0));
+				}
 
-			Tensor anomaly_map = modelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
+				Tensor anomaly_map = modelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
 
-			float max = anomaly_map.max().ToSingle();
-			bool noGood = max > image_threshold;
-			Console.WriteLine("Image threshold is {0} and score is {1}", image_threshold, max);
-			Console.WriteLine("Current image is good: {0}", !noGood);
-			if (noGood)
-			{
-				Console.WriteLine("Get anomaly mask ......");
+				float max = anomaly_map.max().ToSingle();
+				bool noGood = max > image_threshold;
+				Console.WriteLine("Image threshold is {0} and score is {1}", image_threshold, max);
+				Console.WriteLine("Current image is good: {0}", !noGood);
 				Tensor orgImg = tensors["orgImage"].clone().to(device);
-				Tensor t = anomaly_map > pixel_threshold;
-				anomaly_map = (anomaly_map * t).squeeze(0);
-				anomaly_map = torchvision.transforms.functional.resize(anomaly_map, (int)orgImg.size(2), (int)orgImg.size(1));
-				Tensor heatmapNormalized = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min());
-				Tensor coloredHeatmap = torch.zeros([3, (int)orgImg.size(2), (int)orgImg.size(1)],device:anomaly_map.device);
 
-				coloredHeatmap[0] = heatmapNormalized.squeeze(0);
+				if (noGood)
+				{
+					Console.WriteLine("Get anomaly mask ......");
 
-				float alpha = 0.3f;
-				Tensor blendedImage = (1 - alpha) * (orgImg / 255.0f) + alpha * coloredHeatmap;
-				var imageTensor = blendedImage.clamp(0, 1).mul(255).to(ScalarType.Byte);
+					Tensor t = anomaly_map > pixel_threshold;
+					anomaly_map = (anomaly_map * t).squeeze(0);
+					anomaly_map = torchvision.transforms.functional.resize(anomaly_map, (int)orgImg.size(1), (int)orgImg.size(2));
+					Tensor heatmapNormalized = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min());
+					Tensor coloredHeatmap = torch.zeros([3, (int)orgImg.size(1), (int)orgImg.size(2)], device: anomaly_map.device);
 
-				torchvision.io.write_jpeg(imageTensor.cpu(), "result.jpg");
+					coloredHeatmap[0] = heatmapNormalized.squeeze(0);
+
+					float alpha = 0.3f;
+					Tensor blendedImage = (1 - alpha) * (orgImg / 255.0f) + alpha * coloredHeatmap;
+					var imageTensor = blendedImage.clamp(0, 1).mul(255).to(ScalarType.Byte);
+
+					if (tagTensor.ToInt64() == 1)
+					{
+						if (!Directory.Exists("temp/checked"))
+						{
+							Directory.CreateDirectory("temp/checked");
+						}
+						torchvision.io.write_jpeg(imageTensor.cpu(), "temp/checked/" + i + "_result.jpg");
+					}
+					else
+					{
+						if (!Directory.Exists("temp/wrong"))
+						{
+							Directory.CreateDirectory("temp/wrong");
+						}
+						torchvision.io.write_jpeg(imageTensor.cpu(), "temp/wrong/" + i + "_result.jpg");
+						wrongCount++;
+					}
+				}
+				else
+				{
+					if (tagTensor.ToInt64() == 1)
+					{
+						if (!Directory.Exists("temp/unchecked"))
+						{
+							Directory.CreateDirectory("temp/unchecked");
+						}
+						torchvision.io.write_jpeg(orgImg.cpu(), "temp/unchecked/" + i + "_result.jpg");
+						uncheckedCount++;
+					}
+					else
+					{
+						if (!Directory.Exists("temp/good"))
+						{
+							Directory.CreateDirectory("temp/good");
+						}
+						torchvision.io.write_jpeg(orgImg.cpu(), "temp/good/" + i + "_result.jpg");
+					}
+
+				}
 			}
+
+			Console.WriteLine();
+			Console.WriteLine("Test count: " + valDataset.Count + " wrong: " + wrongCount + " unchecked: " + uncheckedCount);
 			Console.WriteLine("Test done.");
 		}
 
@@ -102,7 +146,7 @@ namespace Padim
 			Tensor cov = weight.get_buffer("cov").to(device);
 
 			MVTecDataset.ValDataset valDataset = new MVTecDataset.ValDataset(dataPath);
-			var testLoader = new DataLoader(valDataset, 32, device: device, num_worker: 8);
+			var testLoader = new DataLoader(valDataset, 1, device: device, num_worker: 8);
 
 			List<Tensor> tagTensors = new List<Tensor>();
 			List<Tensor> truthTensors = new List<Tensor>();

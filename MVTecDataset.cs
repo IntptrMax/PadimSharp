@@ -39,6 +39,7 @@ namespace Padim
 				var transformers = torchvision.transforms.Compose([
 					torchvision.transforms.Resize(resizeHeight,resizeWidth),
 				torchvision.transforms.CenterCrop(cropHeight,cropWidth),
+				torchvision.transforms.GaussianBlur(7,7),
 				torchvision.transforms.Normalize(means, stdevs)]);
 
 				Tensor imgTensor = torchvision.io.read_image(file) / 255.0f;
@@ -85,14 +86,22 @@ namespace Padim
 
 				var truth_transformers = torchvision.transforms.Compose([
 					torchvision.transforms.Resize(resizeHeight,resizeWidth),
-				torchvision.transforms.CenterCrop(cropHeight,cropWidth)]);
+				torchvision.transforms.CenterCrop(cropHeight,cropWidth),
+				torchvision.transforms.GaussianBlur(7,7)]);
 
 				Tensor truthTensor = torch.zeros([1, cropHeight, cropWidth]);
 				if (tag == 1)
 				{
 					string ground_truth_Path = Path.Combine(parent.Parent.Parent.FullName, "ground_truth", parent.Name, Path.GetFileNameWithoutExtension(file) + "_mask" + Path.GetExtension(file));
-					truthTensor = torchvision.io.read_image(ground_truth_Path);
-					truthTensor = truth_transformers.call(truthTensor) / 255.0f;
+					if (File.Exists(ground_truth_Path))
+					{
+						truthTensor = torchvision.io.read_image(ground_truth_Path);
+						truthTensor = truth_transformers.call(truthTensor) / 255.0f;
+					}
+					else
+					{
+						truthTensor = torch.ones([1, cropHeight, cropWidth],ScalarType.Float32);
+					}
 				}
 
 				var transformers = torchvision.transforms.Compose([

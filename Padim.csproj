@@ -12,10 +12,4 @@
     <PackageReference Include="TorchVision" Version="0.103.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="Assets\resnet18.bin">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

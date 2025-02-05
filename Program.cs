@@ -7,18 +7,24 @@ namespace Padim
 {
 	internal class Program
 	{
+		private static PadimModel padimModel = new PadimModel();
 		private static Device device = new Device(DeviceType.CUDA);
 		private static ScalarType scalarType = ScalarType.Float32;
 		private static string dataPath = @"..\..\..\Assets\MVTecDataset";
-		private static string modelPath = @"..\..\..\Assets\resnet18.bin";
+		private static string modelPath = @"..\..\..\Assets\padim_model.bin";
 		private static string weightPath = "weight.bin";
-		private static int width = 224;
-		private static int height = 224;
 		private static int t_d = 448;
 		private static int d = 100;
 
 		static void Main(string[] args)
 		{
+			// Load model
+			Console.WriteLine("Load model......");	
+			padimModel.load(modelPath);
+			padimModel.to(device, scalarType);
+			padimModel.eval();
+
+			Console.WriteLine();
 			Train();
 			Val();
 			Test();
@@ -27,11 +33,7 @@ namespace Padim
 		private static void Test()
 		{
 			Console.WriteLine("Test begin......");
-			ResNet model = ResNet.ResNet18().to(device, scalarType);
-			model.load(modelPath);
-			model.eval();
 
-			Console.WriteLine("Load weight......");
 			Weight weight = new Weight();
 			weight.load(weightPath);
 
@@ -47,81 +49,82 @@ namespace Padim
 			List<(string, Tensor)> outputs = new List<(string, Tensor)>();
 
 			Console.WriteLine("Get layers......");
-			ModelHelper modelHelper = new ModelHelper(model);
 
 			int wrongCount = 0;
 			int uncheckedCount = 0;
-			for (int i = 0; i < valDataset.Count; i++)
+			using (torch.no_grad())
 			{
-				var tensors = valDataset.GetTensor(i);
-				Tensor tagTensor = tensors["tag"].clone().to(device);
-				using (torch.no_grad())
+				for (int i = 0; i < valDataset.Count; i++)
 				{
-					outputs = modelHelper.Forward(tensors["image"].clone().to(device).unsqueeze(0));
-				}
+					var tensors = valDataset.GetTensor(i);
+					Tensor tagTensor = tensors["tag"].to(device);
+					outputs = padimModel.forward(tensors["image"].to(device).unsqueeze(0));
 
-				Tensor anomaly_map = modelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
+					Tensor anomaly_map = ModelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
 
-				float max = anomaly_map.max().ToSingle();
-				bool noGood = max > image_threshold;
-				Console.WriteLine("Image threshold is {0} and score is {1}", image_threshold, max);
-				Console.WriteLine("Current image is good: {0}", !noGood);
-				Tensor orgImg = tensors["orgImage"].clone().to(device);
+					float max = anomaly_map.max().ToSingle();
+					bool noGood = max > image_threshold;
+					Console.WriteLine("Image threshold is {0} and score is {1}", image_threshold, max);
+					Console.WriteLine("Current image is good: {0}", !noGood);
+					Tensor orgImg = tensors["orgImage"].clone().to(device);
 
-				if (noGood)
-				{
-					Console.WriteLine("Get anomaly mask ......");
-
-					Tensor t = anomaly_map > pixel_threshold;
-					anomaly_map = (anomaly_map * t).squeeze(0);
-					anomaly_map = torchvision.transforms.functional.resize(anomaly_map, (int)orgImg.size(1), (int)orgImg.size(2));
-					Tensor heatmapNormalized = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min());
-					Tensor coloredHeatmap = torch.zeros([3, (int)orgImg.size(1), (int)orgImg.size(2)], device: anomaly_map.device);
-
-					coloredHeatmap[0] = heatmapNormalized.squeeze(0);
-
-					float alpha = 0.3f;
-					Tensor blendedImage = (1 - alpha) * (orgImg / 255.0f) + alpha * coloredHeatmap;
-					var imageTensor = blendedImage.clamp(0, 1).mul(255).to(ScalarType.Byte);
-
-					if (tagTensor.ToInt64() == 1)
+					if (noGood)
 					{
-						if (!Directory.Exists("temp/checked"))
+						Console.WriteLine("Get anomaly mask ......");
+
+						Tensor t = anomaly_map > pixel_threshold;
+						anomaly_map = (anomaly_map * t).squeeze(0);
+						anomaly_map = torchvision.transforms.functional.resize(anomaly_map, (int)orgImg.size(1), (int)orgImg.size(2));
+						Tensor heatmapNormalized = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min());
+						Tensor coloredHeatmap = torch.zeros([3, (int)orgImg.size(1), (int)orgImg.size(2)], device: anomaly_map.device);
+
+						coloredHeatmap[0] = heatmapNormalized.squeeze(0);
+
+						float alpha = 0.3f;
+						Tensor blendedImage = (1 - alpha) * (orgImg / 255.0f) + alpha * coloredHeatmap;
+						var imageTensor = blendedImage.clamp(0, 1).mul(255).to(ScalarType.Byte);
+
+						if (tagTensor.ToInt64() == 1)
 						{
-							Directory.CreateDirectory("temp/checked");
+							if (!Directory.Exists("temp/checked"))
+							{
+								Directory.CreateDirectory("temp/checked");
+							}
+							torchvision.io.write_jpeg(imageTensor.cpu(), "temp/checked/" + i + "_result.jpg");
 						}
-						torchvision.io.write_jpeg(imageTensor.cpu(), "temp/checked/" + i + "_result.jpg");
+						else
+						{
+							if (!Directory.Exists("temp/wrong"))
+							{
+								Directory.CreateDirectory("temp/wrong");
+							}
+							torchvision.io.write_jpeg(imageTensor.cpu(), "temp/wrong/" + i + "_result.jpg");
+							wrongCount++;
+						}
 					}
 					else
 					{
-						if (!Directory.Exists("temp/wrong"))
+						if (tagTensor.ToInt64() == 1)
 						{
-							Directory.CreateDirectory("temp/wrong");
+							if (!Directory.Exists("temp/unchecked"))
+							{
+								Directory.CreateDirectory("temp/unchecked");
+							}
+							torchvision.io.write_jpeg(orgImg.cpu(), "temp/unchecked/" + i + "_result.jpg");
+							uncheckedCount++;
 						}
-						torchvision.io.write_jpeg(imageTensor.cpu(), "temp/wrong/" + i + "_result.jpg");
-						wrongCount++;
-					}
-				}
-				else
-				{
-					if (tagTensor.ToInt64() == 1)
-					{
-						if (!Directory.Exists("temp/unchecked"))
+						else
 						{
-							Directory.CreateDirectory("temp/unchecked");
+							if (!Directory.Exists("temp/good"))
+							{
+								Directory.CreateDirectory("temp/good");
+							}
+							torchvision.io.write_jpeg(orgImg.cpu(), "temp/good/" + i + "_result.jpg");
 						}
-						torchvision.io.write_jpeg(orgImg.cpu(), "temp/unchecked/" + i + "_result.jpg");
-						uncheckedCount++;
-					}
-					else
-					{
-						if (!Directory.Exists("temp/good"))
-						{
-							Directory.CreateDirectory("temp/good");
-						}
-						torchvision.io.write_jpeg(orgImg.cpu(), "temp/good/" + i + "_result.jpg");
+
 					}
 
+					GC.Collect();
 				}
 			}
 
@@ -133,40 +136,34 @@ namespace Padim
 		private static void Val()
 		{
 			Console.WriteLine("Val begin......");
-			ResNet model = ResNet.ResNet18().to(device, scalarType);
-			model.load(modelPath);
-			model.eval();
-
-			Console.WriteLine("Load weight......");
 			Weight weight = new Weight();
 			weight.load(weightPath);
 
-			Tensor idx = weight.get_buffer("idx").to(device);
-			Tensor mean = weight.get_buffer("mean").to(device);
-			Tensor cov = weight.get_buffer("cov").to(device);
+			using Tensor idx = weight.get_buffer("idx").to(device);
+			using Tensor mean = weight.get_buffer("mean").to(device);
+			using Tensor cov = weight.get_buffer("cov").to(device);
 
 			MVTecDataset.ValDataset valDataset = new MVTecDataset.ValDataset(dataPath);
-			var testLoader = new DataLoader(valDataset, 1, device: device, num_worker: 8);
+			using var testLoader = new DataLoader(valDataset, 1, device: device, num_worker: 8);
 
 			List<Tensor> tagTensors = new List<Tensor>();
 			List<Tensor> truthTensors = new List<Tensor>();
 
-			ModelHelper modelHelper = new ModelHelper(model);
 			List<(string, Tensor)> outputs = new List<(string, Tensor)>();
 
 			Console.WriteLine("Get layers......");
-			foreach (var testBatch in testLoader)
+			using (torch.no_grad())
 			{
-				var inputs = testBatch["image"];
-				using (torch.no_grad())
+				foreach (var testBatch in testLoader)
 				{
+					using var inputs = testBatch["image"];
 					tagTensors.Add(testBatch["tag"].clone());
 					truthTensors.Add(testBatch["truth"].clone());
-					outputs.AddRange(modelHelper.Forward(inputs));
+					outputs.AddRange(padimModel.forward(inputs));
 				}
 			}
 
-			Tensor anomaly_map = modelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
+			Tensor anomaly_map = ModelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
 			Tensor img_scores = anomaly_map.view(anomaly_map.shape[0], -1).max(dim: 1).values;
 			var tagTensor = torch.concat(tagTensors);
 			var truthTensor = torch.concat(truthTensors);
@@ -195,16 +192,12 @@ namespace Padim
 		private static void Train()
 		{
 			Console.WriteLine("Train begin......");
-			ResNet model = ResNet.ResNet18().to(device, scalarType);
-			model.load(modelPath);
-			model.eval();
 
 			Tensor idx = torch.tensor(Sample(0, t_d, d), device: device);
 
 			MVTecDataset.TrainDataset mvtecDataset = new MVTecDataset.TrainDataset(dataPath);
 			var trainLoader = new DataLoader(mvtecDataset, 32, device: device, num_worker: 8);
 
-			ModelHelper modelHelper = new ModelHelper(model);
 			List<(string, Tensor)> outputs = new List<(string, Tensor)>();
 
 			Console.WriteLine("Get layers......");
@@ -213,11 +206,11 @@ namespace Padim
 				var inputs = trainBatch["image"];
 				using (torch.no_grad())
 				{
-					outputs.AddRange(modelHelper.Forward(inputs));
+					outputs.AddRange(padimModel.forward(inputs));
 				}
 			}
 
-			Tensor embedding_vectors = modelHelper.GetEmbedding(outputs);
+			Tensor embedding_vectors = ModelHelper.GetEmbedding(outputs);
 			embedding_vectors = torch.index_select(embedding_vectors, 1, idx);
 			long[] shape = embedding_vectors.shape;
 			long B = shape[0], C = shape[1], H = shape[2], W = shape[3];
@@ -238,6 +231,8 @@ namespace Padim
 				cov[TensorIndex.Ellipsis, i] = cov_slice + 0.01 * I;
 			}
 
+			cov = cov.permute(2, 0, 1).inverse();
+
 			Console.WriteLine("Save weight......");
 			Weight weight = new Weight();
 			weight.get_buffer("cov").copy_(cov);
@@ -254,7 +249,7 @@ namespace Padim
 			public Weight(int d = 100, int height = 224, int width = 224) : base("profile")
 			{
 				int sz = height * width / 16;
-				this.register_buffer("cov", torch.zeros(d, d, sz));
+				this.register_buffer("cov", torch.zeros(sz, d, d));
 				this.register_buffer("mean", torch.zeros(d, sz));
 				this.register_buffer("image_threshold", torch.zeros(1));
 				this.register_buffer("pixel_threshold", torch.zeros(1));

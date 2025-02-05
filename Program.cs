@@ -19,7 +19,7 @@ namespace Padim
 		static void Main(string[] args)
 		{
 			// Load model
-			Console.WriteLine("Load model......");	
+			Console.WriteLine("Load model......");
 			padimModel.load(modelPath);
 			padimModel.to(device, scalarType);
 			padimModel.eval();
@@ -58,7 +58,7 @@ namespace Padim
 				{
 					var tensors = valDataset.GetTensor(i);
 					Tensor tagTensor = tensors["tag"].to(device);
-					outputs = padimModel.forward(tensors["image"].to(device).unsqueeze(0));
+					outputs = padimModel.forward(tensors["image"].to(scalarType, device).unsqueeze(0));
 
 					Tensor anomaly_map = ModelHelper.ComputeAnomalyMap(outputs, mean, cov, idx);
 
@@ -156,7 +156,7 @@ namespace Padim
 			{
 				foreach (var testBatch in testLoader)
 				{
-					using var inputs = testBatch["image"];
+					using var inputs = testBatch["image"].to(scalarType, device);
 					tagTensors.Add(testBatch["tag"].clone());
 					truthTensors.Add(testBatch["truth"].clone());
 					outputs.AddRange(padimModel.forward(inputs));
@@ -203,7 +203,7 @@ namespace Padim
 			Console.WriteLine("Get layers......");
 			foreach (var trainBatch in trainLoader)
 			{
-				var inputs = trainBatch["image"];
+				var inputs = trainBatch["image"].to(scalarType, device);
 				using (torch.no_grad())
 				{
 					outputs.AddRange(padimModel.forward(inputs));
@@ -264,7 +264,7 @@ namespace Padim
 
 			while (uniqueNumbers.Count < count)
 			{
-				int number = random.Next(min, max + 1);
+				int number = random.Next(min, max);
 				uniqueNumbers.Add(number);
 			}
 			return uniqueNumbers.ToArray();

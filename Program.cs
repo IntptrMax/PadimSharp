@@ -81,17 +81,19 @@ namespace Padim
 					{
 						Console.WriteLine("Get anomaly mask ......");
 
-						Tensor t = anomaly_map > pixel_threshold;
-						anomaly_map = (anomaly_map * t).squeeze(0);
-						anomaly_map = torchvision.transforms.functional.resize(anomaly_map, (int)orgImg.size(1), (int)orgImg.size(2));
-						Tensor heatmapNormalized = (anomaly_map - anomaly_map.min()) / (anomaly_map.max() - anomaly_map.min());
-						Tensor coloredHeatmap = torch.zeros([3, (int)orgImg.size(1), (int)orgImg.size(2)], device: anomaly_map.device);
+						int orgWidth = (int)orgImg.shape[2];
+						int orgHeight = (int)orgImg.shape[1];
+						int boundary = 6;
+						anomaly_map = (anomaly_map * (anomaly_map > pixel_threshold)).squeeze(0);
+						anomaly_map = torchvision.transforms.functional.resize(anomaly_map, orgHeight, orgWidth);
 
-						coloredHeatmap[0] = heatmapNormalized.squeeze(0);
+						Tensor boundaryTensor = torchvision.transforms.functional.resize(anomaly_map, orgHeight + 2 * boundary, orgWidth + 2 * boundary).crop(boundary, boundary, orgHeight, orgWidth);
+						Tensor boundaryMask = (boundaryTensor > 0) ^ (anomaly_map > 0);
+						boundaryMask = torch.concat([boundaryMask, boundaryMask, boundaryMask]);
 
-						float alpha = 0.3f;
-						Tensor blendedImage = (1 - alpha) * (orgImg / 255.0f) + alpha * coloredHeatmap;
-						var imageTensor = blendedImage.clamp(0, 1).mul(255).to(ScalarType.Byte);
+						var imageTensor = orgImg.clone();
+						imageTensor[0] = (orgImg[0] + anomaly_map.squeeze(0) * 255.0f).clip(0, 255).to(ScalarType.Byte);
+						imageTensor = (imageTensor + boundaryMask * 255.0f).clip(0, 255).to(ScalarType.Byte);
 
 						if (tagTensor.ToInt64() == 1)
 						{

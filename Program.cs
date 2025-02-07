@@ -1,4 +1,5 @@
-﻿using TorchSharp;
+﻿using System.Diagnostics;
+using TorchSharp;
 using TorchSharp.Modules;
 using static TorchSharp.torch;
 using Module = TorchSharp.torch.nn.Module;
@@ -25,9 +26,17 @@ namespace Padim
 			padimModel.eval();
 
 			Console.WriteLine();
+			Stopwatch stopwatch = Stopwatch.StartNew();
 			Train();
+			Console.WriteLine($"Train time: {stopwatch.ElapsedMilliseconds}ms");
+			Console.WriteLine();
+			stopwatch.Restart();
 			Val();
+			Console.WriteLine($"Val time: {stopwatch.ElapsedMilliseconds}ms");
+			stopwatch.Restart();
+			Console.WriteLine();
 			Test();
+			Console.WriteLine($"Test time: {stopwatch.ElapsedMilliseconds}ms");
 		}
 
 		private static void Test()
@@ -90,7 +99,7 @@ namespace Padim
 							{
 								Directory.CreateDirectory("temp/checked");
 							}
-							torchvision.io.write_jpeg(imageTensor.cpu(), "temp/checked/" + i + "_result.jpg");
+							torchvision.io.write_image_async(imageTensor.cpu(), "temp/checked/" + i + "_result.jpg", torchvision.ImageFormat.Jpeg);
 						}
 						else
 						{
@@ -98,7 +107,7 @@ namespace Padim
 							{
 								Directory.CreateDirectory("temp/wrong");
 							}
-							torchvision.io.write_jpeg(imageTensor.cpu(), "temp/wrong/" + i + "_result.jpg");
+							torchvision.io.write_image_async(imageTensor.cpu(), "temp/wrong/" + i + "_result.jpg", torchvision.ImageFormat.Jpeg);
 							wrongCount++;
 						}
 					}
@@ -110,7 +119,7 @@ namespace Padim
 							{
 								Directory.CreateDirectory("temp/unchecked");
 							}
-							torchvision.io.write_jpeg(orgImg.cpu(), "temp/unchecked/" + i + "_result.jpg");
+							torchvision.io.write_image_async(orgImg.cpu(), "temp/unchecked/" + i + "_result.jpg", torchvision.ImageFormat.Jpeg);
 							uncheckedCount++;
 						}
 						else
@@ -119,7 +128,7 @@ namespace Padim
 							{
 								Directory.CreateDirectory("temp/good");
 							}
-							torchvision.io.write_jpeg(orgImg.cpu(), "temp/good/" + i + "_result.jpg");
+							torchvision.io.write_image_async(orgImg.cpu(), "temp/good/" + i + "_result.jpg", torchvision.ImageFormat.Jpeg);
 						}
 
 					}
@@ -201,11 +210,11 @@ namespace Padim
 			List<(string, Tensor)> outputs = new List<(string, Tensor)>();
 
 			Console.WriteLine("Get layers......");
-			foreach (var trainBatch in trainLoader)
+			using (torch.no_grad())
 			{
-				var inputs = trainBatch["image"].to(scalarType, device);
-				using (torch.no_grad())
+				foreach (var trainBatch in trainLoader)
 				{
+					var inputs = trainBatch["image"].to(scalarType, device);
 					outputs.AddRange(padimModel.forward(inputs));
 				}
 			}

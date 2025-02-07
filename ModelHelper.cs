@@ -42,10 +42,8 @@ namespace Padim
 				long height = embedding.shape[2];
 				long width = embedding.shape[3];
 
-				//Tensor inv_covariance = covariance.permute(2, 0, 1).inverse();
 				var embedding_reshaped = embedding.reshape(batch, channel, height * width);
 				var delta = (embedding_reshaped - mean).permute(2, 0, 1);
-				//var distances = (torch.matmul(delta, inv_covariance) * delta).sum(2).permute(1, 0);
 				var distances = (torch.matmul(delta, covariance) * delta).sum(2).permute(1, 0);
 				distances = distances.reshape(batch, 1, height, width);
 				distances = distances.clamp(0).sqrt();
@@ -80,7 +78,7 @@ namespace Padim
 			using (NewDisposeScope())
 			{
 				Tensor embedding = GetEmbedding(outputs);
-				var embeddingVectors = torch.index_select(embedding, 1, idx);
+				Tensor embeddingVectors = torch.index_select(embedding, 1, idx);
 				return ComputeAnomalyMapInternal(embeddingVectors, mean, covariance).MoveToOuterDisposeScope();
 			}
 		}

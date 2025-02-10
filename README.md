@@ -7,12 +7,13 @@ We have tested on MVTec.
 
 For example:
 
-
 The image to detect:
 
-![image](https://github.com/user-attachments/assets/27a1c6b3-b7ee-499a-a325-56fa6745be81)
+![019](https://github.com/user-attachments/assets/dda1aef9-9940-4952-b8bf-4d5f3907ec45)
+
 
 We can get the mask:
 
-![image](https://github.com/user-attachments/assets/f4a2ee58-01e1-4903-9619-16837550a605)
+![19_result](https://github.com/user-attachments/assets/e00c6435-d28e-4773-ba8c-0a72d7d898d5)
+
 

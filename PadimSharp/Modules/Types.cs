@@ -1,4 +1,4 @@
-﻿namespace Padim.Modules
+﻿namespace PadimSharp.Modules
 {
     public enum BackboneType
     {

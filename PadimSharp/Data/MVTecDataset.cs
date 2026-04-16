@@ -1,6 +1,6 @@
 ﻿using TorchSharp;
 
-namespace Padim.Data
+namespace PadimSharp.Data
 {
     internal class MVTecDataset
     {

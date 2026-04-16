@@ -1,5 +1,5 @@
-﻿using Padim.Config;
-using Padim.Model;
+﻿using PadimSharp.Config;
+using PadimSharp.Model;
 using System.Diagnostics;
 using TorchSharp;
 
@@ -11,7 +11,7 @@ namespace PadimSharpDemo
         {
             DeviceType deviceType = DeviceType.CUDA;
             torch.ScalarType scalarType = torch.ScalarType.Float32;
-            Padim.Modules.BackboneType backboneType = Padim.Modules.BackboneType.ResNet18;  // WideResNet50_2 is better but slower, and need more GPU memory.
+            PadimSharp.Modules.BackboneType backboneType = PadimSharp.Modules.BackboneType.ResNet18;  // WideResNet50_2 is better but slower, and need more GPU memory.
             string dataPath = @"..\..\..\Assets\MVTecDataset";
             string modelPath = @"..\..\..\Assets\Models\ResNet18.bin";
             string outputPath = @".\Output";

@@ -1,6 +1,6 @@
 ﻿using TorchSharp;
 
-namespace Padim.Utils
+namespace PadimSharp.Utils
 {
     internal class Utils
     {
@@ -56,9 +56,9 @@ namespace Padim.Utils
                 long height = embedding.shape[2];
                 long width = embedding.shape[3];
 
-                var embedding_reshaped = embedding.reshape(batch, channel, height * width);
-                var delta = (embedding_reshaped - mean).permute(2, 0, 1);
-                var distances = (torch.matmul(delta, covariance) * delta).sum(2).permute(1, 0);
+                torch.Tensor embedding_reshaped = embedding.reshape(batch, channel, height * width);
+                torch.Tensor delta = (embedding_reshaped - mean).permute(2, 0, 1);
+                torch.Tensor distances = (torch.matmul(delta, covariance) * delta).sum(2).permute(1, 0);
                 distances = distances.reshape(batch, 1, height, width);
                 distances = distances.clamp(0).sqrt();
                 return distances.MoveToOuterDisposeScope();

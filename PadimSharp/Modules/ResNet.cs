@@ -1,7 +1,7 @@
 ﻿using TorchSharp;
 using TorchSharp.Modules;
 
-namespace Padim.Modules
+namespace PadimSharp.Modules
 {
     public class ResNet : torch.nn.Module<torch.Tensor, (torch.Tensor, torch.Tensor, torch.Tensor)>
     {

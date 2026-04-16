@@ -1,6 +1,6 @@
 ﻿using TorchSharp;
 
-namespace Padim.Utils
+namespace PadimSharp.Utils
 {
     internal class PrecisionRecall
     {

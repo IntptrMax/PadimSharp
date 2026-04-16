@@ -1,8 +1,8 @@
-﻿using Padim.Modules;
+﻿using PadimSharp.Modules;
 using System.Text;
 using TorchSharp;
 
-namespace Padim.Config
+namespace PadimSharp.Config
 {
     public class Config
     {
@@ -42,11 +42,6 @@ namespace Padim.Config
         public int BatchSize { get; set; } = 16;
 
         /// <summary>
-        /// Train epochs
-        /// </summary>
-        public int Epochs { get; set; } = 100;
-
-        /// <summary>
         /// Workers for training
         /// </summary>
         public int Workers { get; set; } = Math.Min(Environment.ProcessorCount / 2, 4);
@@ -73,7 +68,7 @@ namespace Padim.Config
 
         public Config(string? rootPath = null, string? outputPath = null, int? resizedWidth = null, int? resizedHeight = null,
             int? croppedWidth = null, int? croppedHeight = null, int? batchSize = null, BackboneType? backboneType = null,
-            string? pretrainedModelPath = null, int? epochs = null, int? workers = null, DeviceType? deviceType = null,
+            string? pretrainedModelPath = null, int? workers = null, DeviceType? deviceType = null,
             torch.ScalarType? dtype = null)
         {
             this.RootPath = rootPath ?? RootPath;
@@ -83,7 +78,6 @@ namespace Padim.Config
             this.CroppedWidth = croppedWidth ?? CroppedWidth;
             this.CroppedHeight = croppedHeight ?? CroppedHeight;
             this.BatchSize = batchSize ?? BatchSize;
-            this.Epochs = epochs ?? Epochs;
             this.Workers = workers ?? Math.Min(Environment.ProcessorCount / 2, 4);
             this.DeviceType = deviceType ?? DeviceType;
             this.ScalarType = dtype ?? ScalarType;
@@ -91,8 +85,8 @@ namespace Padim.Config
             this.PretrainedModelPath = pretrainedModelPath ?? PretrainedModelPath;
         }
 
-        public torch.Device Device => new torch.Device((TorchSharp.DeviceType)DeviceType);
-        public torch.ScalarType Dtype => (torch.ScalarType)ScalarType;
+        public torch.Device Device => new torch.Device(DeviceType);
+        public torch.ScalarType Dtype => ScalarType;
 
         public override string ToString()
         {
@@ -103,7 +97,6 @@ namespace Padim.Config
             stringBuilder.AppendLine($"Image Height: {ResizedHight}");
             stringBuilder.AppendLine($"Crop Width: {CroppedWidth}");
             stringBuilder.AppendLine($"Crop Height: {CroppedHeight}");
-            stringBuilder.AppendLine($"Epochs: {Epochs}");
             stringBuilder.AppendLine($"Batch Size: {BatchSize}");
             stringBuilder.AppendLine($"Num Workers: {Workers}");
             stringBuilder.AppendLine($"Backbone Type: {BackboneType}");

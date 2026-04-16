@@ -1,6 +1,6 @@
 ﻿using TorchSharp;
 
-namespace Padim.Modules
+namespace PadimSharp.Modules
 {
     public class Weight : torch.nn.Module
     {

@@ -1,11 +1,11 @@
-﻿using Padim.Data;
-using Padim.Modules;
-using Padim.Utils;
+﻿using PadimSharp.Data;
+using PadimSharp.Modules;
+using PadimSharp.Utils;
 using System.Text;
 using TorchSharp;
 using TorchSharp.Modules;
 
-namespace Padim.Model
+namespace PadimSharp.Model
 {
     public class BaseModel
     {
@@ -13,7 +13,7 @@ namespace Padim.Model
         private torch.nn.Module<torch.Tensor, (torch.Tensor, torch.Tensor, torch.Tensor)> net;
         private int totalDimension, subspaceDimension;
 
-        private torch.Tensor idx, mean, cov;
+        private torch.Tensor idx = torch.empty(0), mean = torch.empty(0), cov = torch.empty(0);
         private float image_threshold, pixel_threshold;
 
         public BaseModel(Config.Config config)
@@ -61,7 +61,6 @@ namespace Padim.Model
             Console.WriteLine("Start Training:");
             ulong seed = (ulong)DateTime.Now.Ticks;
             (float image_average_precision, float pixel_average_precision, float image_threshold, float pixel_threshold, torch.Tensor idx, torch.Tensor cov, torch.Tensor mean) = TrainEpoch(seed, trainLoader, testLoader);
-
             Console.WriteLine($"Image Average Precision: {image_average_precision}");
             Console.WriteLine($"Pixel Average Precision: {pixel_average_precision}");
 
@@ -86,27 +85,23 @@ namespace Padim.Model
 
                 foreach (var trainBatch in trainLoader)
                 {
-                    using (torch.NewDisposeScope())
-                    {
-                        torch.Tensor inputs = trainBatch["image"].to(config.Dtype);
-                        (torch.Tensor layer1, torch.Tensor layer2, torch.Tensor layer3) = net.forward(inputs);
-                        opts[0].Add(layer1.MoveToOuterDisposeScope());
-                        opts[1].Add(layer2.MoveToOuterDisposeScope());
-                        opts[2].Add(layer3.MoveToOuterDisposeScope());
-                    }
+                    torch.Tensor inputs = trainBatch["image"].to(config.Dtype);
+                    (torch.Tensor layer1, torch.Tensor layer2, torch.Tensor layer3) = net.forward(inputs);
+                    opts[0].Add(layer1);
+                    opts[1].Add(layer2);
+                    opts[2].Add(layer3);
                 }
 
                 torch.Generator generator = new torch.Generator(seed);
                 torch.Tensor idx = torch.randperm(this.totalDimension, generator: generator, dtype: torch.ScalarType.Int64);
                 idx = idx.slice(0, 0, this.subspaceDimension, 1);
                 idx = idx.to(config.Device);
-
                 torch.Tensor embedding_vectors = Utils.Utils.GetEmbedding(opts);
+
                 embedding_vectors = torch.index_select(embedding_vectors, 1, idx);
                 long[] shape = embedding_vectors.shape;
                 long B = shape[0], C = shape[1], H = shape[2], W = shape[3];
                 embedding_vectors = embedding_vectors.view(B, C, H * W);
-
                 torch.Tensor mean = torch.mean(embedding_vectors, dimensions: [0]);
                 torch.Tensor cov = torch.zeros([C, C, H * W], device: config.Device);
 
@@ -131,17 +126,14 @@ namespace Padim.Model
 
                 foreach (var testBatch in valLoader)
                 {
-                    using (torch.NewDisposeScope())
-                    {
-                        torch.Tensor inputs = testBatch["image"].to(config.Dtype);
-                        tagTensors.Add(testBatch["tag"].clone().MoveToOuterDisposeScope());
-                        truthTensors.Add(testBatch["truth"].clone().MoveToOuterDisposeScope());
+                    torch.Tensor inputs = testBatch["image"].to(config.Dtype);
+                    tagTensors.Add(testBatch["tag"].clone());
+                    truthTensors.Add(testBatch["truth"].clone());
 
-                        (torch.Tensor layer1, torch.Tensor layer2, torch.Tensor layer3) = net.forward(inputs);
-                        valOpts[0].Add(layer1.MoveToOuterDisposeScope());
-                        valOpts[1].Add(layer2.MoveToOuterDisposeScope());
-                        valOpts[2].Add(layer3.MoveToOuterDisposeScope());
-                    }
+                    (torch.Tensor layer1, torch.Tensor layer2, torch.Tensor layer3) = net.forward(inputs);
+                    valOpts[0].Add(layer1);
+                    valOpts[1].Add(layer2);
+                    valOpts[2].Add(layer3);
                 }
 
 
